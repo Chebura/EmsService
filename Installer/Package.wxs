@@ -1,0 +1,105 @@
+<?define UiUrl = "http://localhost:5080/" ?>
+
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui"
+     xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
+
+  <Package Name="EMS Service"
+           Manufacturer="Kalianov Dmitry"
+           Version="$(Version)"
+           UpgradeCode="85434764-9949-41c5-aa4e-69ff5ac3c200"
+           Scope="perMachine"
+           Codepage="1251">
+
+    <SummaryInformation Description="Email Mass Sender service" Codepage="1251" />
+
+    <MajorUpgrade DowngradeErrorMessage="Уже установлена более новая версия [ProductName]." />
+
+    <MediaTemplate EmbedCab="yes" />
+
+    <Property Id="ARPURLINFOABOUT" Value="$(UiUrl)" />
+
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="EMS Service" />
+    </StandardDirectory>
+
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="AppMenuFolder" Name="EMS Service" />
+    </StandardDirectory>
+
+    <ComponentGroup Id="AppFiles" Directory="INSTALLFOLDER">
+      <!-- The service executable registers the Windows service. -->
+      <Component Id="ServiceExe">
+        <File Id="ServiceExe" Source="$(PublishDir)ems-service.exe" KeyPath="yes" />
+
+        <ServiceInstall Id="EmsServiceInstall"
+                        Name="EmsService"
+                        DisplayName="EMS Service"
+                        Description="Email Mass Sender: массовая рассылка писем. Веб-интерфейс: http://localhost:5080"
+                        Type="ownProcess"
+                        Start="auto"
+                        ErrorControl="normal"
+                        Account="LocalSystem"
+                        Vital="yes">
+          <util:ServiceConfig FirstFailureActionType="restart"
+                              SecondFailureActionType="restart"
+                              ThirdFailureActionType="none"
+                              RestartServiceDelayInSeconds="10"
+                              ResetPeriodInDays="1" />
+        </ServiceInstall>
+
+        <ServiceControl Id="EmsServiceControl"
+                        Name="EmsService"
+                        Start="install"
+                        Stop="both"
+                        Remove="uninstall"
+                        Wait="yes" />
+      </Component>
+
+      <!-- Keeps the user's endpoint settings on upgrade and uninstall. -->
+      <Component Id="AppSettings" NeverOverwrite="yes" Permanent="yes">
+        <File Id="AppSettings" Source="$(PublishDir)appsettings.json" KeyPath="yes" />
+      </Component>
+
+      <!--
+        emssettings.json, texts, tasks and logs are created by the service at runtime and are not part of the package,
+        so they are kept on upgrade and uninstall.
+      -->
+      <Files Include="$(PublishDir)**">
+        <Exclude Files="$(PublishDir)ems-service.exe" />
+        <Exclude Files="$(PublishDir)appsettings.json" />
+        <Exclude Files="$(PublishDir)*.pdb" />
+      </Files>
+    </ComponentGroup>
+
+    <Component Id="StartMenuShortcut" Directory="AppMenuFolder">
+      <util:InternetShortcut Id="WebUiShortcut"
+                             Name="EMS Service"
+                             Target="$(UiUrl)"
+                             Type="url" />
+      <RemoveFolder Id="RemoveAppMenuFolder" On="uninstall" />
+      <RegistryValue Root="HKMU" Key="Software\EmsService" Name="StartMenuShortcut" Type="integer" Value="1"
+                     KeyPath="yes" />
+    </Component>
+
+    <!-- Desktop shortcut to the web UI at its default address. -->
+    <Component Id="DesktopShortcut" Directory="DesktopFolder">
+      <util:InternetShortcut Id="WebUiDesktopShortcut"
+                             Name="EMS Service"
+                             Target="$(UiUrl)"
+                             Type="url" />
+      <RegistryValue Root="HKMU" Key="Software\EmsService" Name="DesktopShortcut" Type="integer" Value="1"
+                     KeyPath="yes" />
+    </Component>
+
+    <Feature Id="Main" Title="EMS Service" AllowAbsent="no">
+      <ComponentGroupRef Id="AppFiles" />
+      <ComponentRef Id="StartMenuShortcut" />
+      <ComponentRef Id="DesktopShortcut" />
+    </Feature>
+
+    <ui:WixUI Id="WixUI_InstallDir" InstallDirectory="INSTALLFOLDER" />
+    <WixVariable Id="WixUILicenseRtf" Value="License.rtf" />
+
+  </Package>
+</Wix>

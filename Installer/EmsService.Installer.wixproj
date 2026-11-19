@@ -1,0 +1,37 @@
+<Project Sdk="WixToolset.Sdk/5.0.2">
+
+  <!--
+    Windows installer (MSI) for EmsService.
+    Build on Windows: dotnet build Installer -c Release
+    Result: Installer\bin\Release\EmsService.msi
+  -->
+
+  <PropertyGroup>
+    <OutputName>EmsService</OutputName>
+    <InstallerPlatform>x64</InstallerPlatform>
+    <Cultures>ru-RU</Cultures>
+    <SuppressIces>ICE61</SuppressIces>
+    <EmsServiceProject>$(MSBuildThisFileDirectory)..\EmsService\EmsService.csproj</EmsServiceProject>
+    <EmsPublishDir>$(MSBuildThisFileDirectory)obj\$(Configuration)\publish\</EmsPublishDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="WixToolset.UI.wixext" Version="5.0.2" />
+    <PackageReference Include="WixToolset.Util.wixext" Version="5.0.2" />
+  </ItemGroup>
+
+  <!-- Publishes the self-contained service and passes its location and version to Package.wxs. -->
+  <Target Name="PublishEmsService" BeforeTargets="BeforeBuild">
+    <RemoveDir Directories="$(EmsPublishDir)" />
+    <Exec Command="dotnet publish &quot;$(EmsServiceProject)&quot; -c $(Configuration) -r win-x64 -o &quot;$(EmsPublishDir.TrimEnd('\'))&quot; -nologo" />
+
+    <XmlPeek XmlInputPath="$(EmsServiceProject)" Query="/Project/PropertyGroup/Version/text()">
+      <Output TaskParameter="Result" PropertyName="EmsVersion" />
+    </XmlPeek>
+
+    <PropertyGroup>
+      <DefineConstants>$(DefineConstants);PublishDir=$(EmsPublishDir);Version=$(EmsVersion)</DefineConstants>
+    </PropertyGroup>
+  </Target>
+
+</Project>

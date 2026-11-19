@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>EMS Service</title>
+  <link rel="stylesheet" href="app.css">
+  <script>
+    // Applied before rendering to avoid a flash of the wrong theme.
+    try {
+      const theme = localStorage.getItem('ems-theme');
+      if (theme === 'light' || theme === 'dark') document.documentElement.dataset.theme = theme;
+    } catch (e) { /* storage is unavailable: the system theme is used */ }
+  </script>
+</head>
+<body>
+<header>
+  <h1>Email Mass Sender</h1>
+  <span id="version" class="muted"></span>
+  <nav>
+    <button class="tab active" data-tab="run">Рассылка</button>
+    <button class="tab" data-tab="settings">Настройки</button>
+    <button class="tab" data-tab="groups">Группы</button>
+    <button class="tab" data-tab="logs">Журнал</button>
+    <button id="btn-theme" class="theme-toggle" type="button"></button>
+  </nav>
+</header>
+
+<div id="toast" hidden></div>
+
+<main>
+  <!-- Рассылка -->
+  <section id="tab-run" class="panel">
+    <div class="card status-card">
+      <div>
+        <div class="status-line">Состояние: <b id="run-state">—</b></div>
+        <div class="muted" id="run-details"></div>
+        <div class="error" id="run-error"></div>
+      </div>
+      <div class="actions">
+        <button id="btn-run" class="primary big">Запустить рассылку</button>
+        <button id="btn-stop" class="danger">Остановить</button>
+      </div>
+    </div>
+    <p class="muted">
+      Рассылка выполняется, пока все письма не будут отправлены либо не будет исчерпано количество попыток
+      (или не истечёт срок актуальности группы). Будут обработаны группы:
+      <b id="run-groups"></b>.
+    </p>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>Задачи</h2>
+        <button id="btn-tasks-refresh">Обновить</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+          <tr>
+            <th>Задача</th><th>Создана</th><th>Изменена</th>
+            <th>Всего</th><th>Отправлено</th><th>Ожидают</th><th>Ошибка</th><th>Не отправлено</th><th></th>
+          </tr>
+          </thead>
+          <tbody id="tasks"></tbody>
+        </table>
+      </div>
+      <p class="muted">Задача создаётся для каждой пары «группа + текст письма». Удалите задачу, чтобы при следующем
+        запуске разослать тот же текст заново.</p>
+    </div>
+
+    <div class="card" id="task-details" hidden>
+      <div class="card-head">
+        <h2 id="task-details-title"></h2>
+        <button id="btn-task-close">Закрыть</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Получатель</th><th>Состояние</th><th>Попытка</th><th>Осталось попыток</th><th>Ошибка</th></tr></thead>
+          <tbody id="task-items"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- Настройки -->
+  <section id="tab-settings" class="panel" hidden>
+    <form id="settings-form" autocomplete="off">
+      <div class="card">
+        <h2>Отправитель</h2>
+        <div class="grid">
+          <label>Адрес отправителя<input name="FromAddress" type="email"></label>
+          <label>Имя отправителя<input name="FromTitle"></label>
+          <label>Кодировка писем<input name="Encoding" placeholder="utf-8"></label>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>SMTP-сервер</h2>
+        <label class="check"><input name="SmtpClient.Enable" type="checkbox"> Отправлять письма (если выключено — отправка только имитируется)</label>
+        <div class="grid">
+          <label>Сервер<input name="SmtpClient.Host"></label>
+          <label>Порт<input name="SmtpClient.Port" type="number" min="1" max="65535"></label>
+          <label>Пользователь<input name="SmtpClient.Username" autocomplete="off"></label>
+          <label>Пароль<input name="SmtpClient.Password" type="password" autocomplete="new-password"></label>
+        </div>
+        <label class="check"><input name="SmtpClient.UseSsl" type="checkbox"> Использовать SSL/TLS</label>
+      </div>
+
+      <div class="card">
+        <h2>Отправка</h2>
+        <div class="grid">
+          <label>Группы для рассылки<input name="DefaultGroups" placeholder="все группы"><small>Имена через «;», пусто — все.</small></label>
+          <label>Потоков<input name="Threads" type="number" min="1"></label>
+          <label>Задержка между письмами в потоке<input name="DelayBetweenSendsInThread" data-timespan placeholder="00:00:01"></label>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Повторная отправка</h2>
+        <label class="check"><input name="RollUpStrategy.Enable" type="checkbox"> Повторять отправку при ошибке</label>
+        <div class="grid">
+          <label>Задержка между попытками<input name="RollUpStrategy.Delay" data-timespan placeholder="00:01:00"></label>
+          <label>Максимум попыток<input name="RollUpStrategy.MaxCount" type="number" min="1"></label>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Задачи</h2>
+        <div class="grid">
+          <label>Каталог задач<input name="TasksPath" placeholder="./tasks"></label>
+          <label>Срок хранения задач<input name="TaskFileLifetime" data-timespan placeholder="14.00:00:00"></label>
+        </div>
+        <label class="check"><input name="DeleteObsoleteTasks" type="checkbox"> Удалять устаревшие задачи</label>
+        <label class="check"><input name="ResetTasks" type="checkbox"> Пересоздавать задачи при каждом запуске (письма уйдут повторно)</label>
+      </div>
+
+      <div class="savebar">
+        <span class="muted">Файл настроек: <span id="settings-path"></span></span>
+        <button type="submit" class="primary">Сохранить</button>
+      </div>
+    </form>
+  </section>
+
+  <!-- Группы -->
+  <section id="tab-groups" class="panel" hidden>
+    <div class="groups">
+      <div class="card group-list">
+        <div class="card-head">
+          <h2>Группы</h2>
+          <button id="btn-group-add">Добавить</button>
+        </div>
+        <ul id="group-list"></ul>
+      </div>
+
+      <div class="card group-editor" id="group-editor" hidden>
+        <div class="grid">
+          <label>Имя группы<input id="g-name"></label>
+          <label>Тема письма<input id="g-subject"></label>
+          <label>Файл с текстом письма<input id="g-file" placeholder="texts/group.txt"></label>
+          <label>Кодировка<input id="g-encoding" placeholder="как в настройках"></label>
+          <label>Актуальность<input id="g-actuality" data-timespan placeholder="01:00:00"><small>После этого срока повторные попытки прекращаются.</small></label>
+        </div>
+        <label>Получатели <small id="g-count"></small><textarea id="g-receivers" rows="10" placeholder="по одному адресу в строке"></textarea></label>
+        <div class="actions">
+          <button id="btn-group-delete" class="danger">Удалить группу</button>
+          <button id="btn-group-save" class="primary">Сохранить группы</button>
+        </div>
+
+        <h2>Текст письма</h2>
+        <p class="muted" id="g-text-info"></p>
+        <textarea id="g-text" rows="14"></textarea>
+        <div class="actions">
+          <button id="btn-text-save" class="primary">Сохранить текст</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Журнал -->
+  <section id="tab-logs" class="panel" hidden>
+    <div class="card">
+      <div class="card-head">
+        <h2>Журнал</h2>
+        <label class="check inline"><input id="logs-auto" type="checkbox" checked> Автообновление</label>
+        <button id="btn-logs-refresh">Обновить</button>
+      </div>
+      <pre id="logs"></pre>
+    </div>
+  </section>
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>
